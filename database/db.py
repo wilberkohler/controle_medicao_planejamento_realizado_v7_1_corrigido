@@ -1,12 +1,48 @@
+from __future__ import annotations
+
 import sqlite3
 from config.settings import DB_DIR, DB_PATH
 
+
 def get_connection():
     DB_DIR.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA synchronous = NORMAL")
+    conn.execute("PRAGMA busy_timeout = 30000")
     return conn
+
+
+def _create_indexes(cur):
+    cur.executescript(
+        """
+        CREATE INDEX IF NOT EXISTS idx_medicoes_contrato_competencia
+            ON medicoes (contrato_id, competencia);
+        CREATE INDEX IF NOT EXISTS idx_planejamento_mensal_contrato_competencia
+            ON planejamento_mensal (contrato_id, competencia);
+        CREATE INDEX IF NOT EXISTS idx_planejamento_mensal_etapa_competencia
+            ON planejamento_mensal (etapa_id, competencia);
+        CREATE INDEX IF NOT EXISTS idx_realizado_mensal_contrato_competencia
+            ON realizado_mensal (contrato_id, competencia);
+        CREATE INDEX IF NOT EXISTS idx_realizado_mensal_etapa_competencia
+            ON realizado_mensal (etapa_id, competencia);
+        CREATE INDEX IF NOT EXISTS idx_prod_metas_contrato_competencia
+            ON produtividade_metas (contrato_id, competencia);
+        CREATE INDEX IF NOT EXISTS idx_prod_realizado_contrato_competencia
+            ON produtividade_realizado (contrato_id, competencia);
+        CREATE INDEX IF NOT EXISTS idx_prod_custos_contrato_competencia
+            ON produtividade_custos (contrato_id, competencia);
+        CREATE INDEX IF NOT EXISTS idx_despesas_planejamento_contrato_competencia
+            ON despesas_planejamento (contrato_id, competencia);
+        CREATE INDEX IF NOT EXISTS idx_despesas_realizado_contrato_competencia
+            ON despesas_realizado (contrato_id, competencia);
+        CREATE INDEX IF NOT EXISTS idx_workflow_modulo_registro
+            ON workflow_aprovacoes (modulo, registro_id);
+        """
+    )
+
 
 def initialize_database():
     conn = get_connection()
@@ -172,7 +208,6 @@ def initialize_database():
             UNIQUE (medicao_id, entregavel_id)
         );
 
-
         CREATE TABLE IF NOT EXISTS produtividade_parametros (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             disciplina TEXT NOT NULL UNIQUE,
@@ -292,8 +327,6 @@ def initialize_database():
             FOREIGN KEY (usuario_aprovador_id) REFERENCES usuarios(id) ON DELETE SET NULL
         );
 
-
-
         CREATE TABLE IF NOT EXISTS despesas_planejamento (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             contrato_id INTEGER,
@@ -324,7 +357,6 @@ def initialize_database():
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (contrato_id) REFERENCES contratos(id) ON DELETE SET NULL
         );
-
 
         CREATE TABLE IF NOT EXISTS financeiro_orcamento_oficial (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -373,5 +405,6 @@ def initialize_database():
         );
         '''
     )
+    _create_indexes(cur)
     conn.commit()
     conn.close()
